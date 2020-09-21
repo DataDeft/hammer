@@ -1,19 +1,19 @@
-(ns hammer.main
+(ns hammer.core
   (:require
     [clojure.edn            :as edn                 ]
     [clojure.core.async     :as async               ]
-    [clojure.tools.cli      :refer [parse-opts]     ])
+    [clojure.tools.cli      :refer [parse-opts]     ]
+    [clojure.tools.logging  :as log                 ] )
   ; Java
   (:import
     [java.io                          File                                  ]
     [java.util                        UUID                                  ]
     [clojure.lang                     PersistentHashMap PersistentArrayMap  ]
     [clojure.core.async.impl.channels ManyToManyChannel                     ]
-    [com.datastax.driver.core         Cluster Cluster$Builder               ]
-    [org.apache.logging.log4j         Logger LogManager                     ] )
+    [com.datastax.driver.core         Cluster Cluster$Builder               ] )
   (:gen-class))
 
-(def log (. LogManager getLogger "main"))
+
 
 (defn read-file
   "Returns {:ok string } or {:error...}"
@@ -51,11 +51,11 @@
         ;the read-file operation returned an error
         file-string)))
 
-(defn cluster
+(defn getCluster
   [serverAddress]
   (.build (.addContactPoint (Cluster$Builder.) serverAddress)))
 
-(defn session
+(defn getSession
   [cluster db]
   (.connect cluster db))
 
@@ -69,16 +69,43 @@
       " :: " (.getState host)
       " :: " (.toString (.getCassandraVersion host)))))
 
+(defn runQuery
+  []
+  )
+
 (def cli-options
   ;; An option with a required argument
   [ ["-c" "--config FILE" "Config file location" :default "conf/app.edn"]
     ["-h" "--help"] ])
 
-(defn main
+(defn -main
   [& args]
   (let
     [
-      opts (parse-opts args cli-options) ]
-    ; ^PersistentHashMap config (read-config "conf/app.edn") ]
-    (. log info opts)))
+      opts    (parse-opts args cli-options)
+      config  (read-config (get-in opts [:options :config]))
+    ]
+    (log/info "Starting up...")
+    (if (:ok config)
+      (log/info config)
+      (do
+        (log/error config)
+        (exit 1)))
+    (try
+      (let
+        [
+          initial-server  (get-in config [:ok :cassandra-client :initial-server])
+          keyspace        (get-in config [:ok :cassandra-client :keyspace])
+          _               (log/info "Connecting to cluster")
+          cluster         (getCluster initial-server)
+          session         (getSession cluster keyspace)
+        ]
+
+        (doseq [s (getConnectedHosts session)] (log/info s))
+
+        (exit 0)
+
+      )
+     (catch Exception e (log/error (str "caught exception: " (.getMessage e)))))))
+
 
