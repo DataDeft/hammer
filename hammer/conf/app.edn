@@ -1,0 +1,11 @@
+{
+  :hammer {
+    :thread-count 5
+    :thread-timeout 1000
+    :channel-timeout 5000
+  }
+  :cassandra-client {
+    :keyspace "test"
+    :initial-server "10.243.128.4"
+  }
+}
