@@ -6,12 +6,12 @@
     )
   ; Java
   (:import
-    [java.net                                         InetSocketAddress    ]
-    [clojure.core.async.impl.channels                 ManyToManyChannel    ]
-    [com.datastax.oss.driver.api.core                 CqlSession           ]
-    [com.datastax.oss.driver.api.querybuilder         SchemaBuilder        ]
-    [com.datastax.oss.driver.api.core.type            DataTypes            ]
-    [com.datastax.oss.driver.api.core.metadata.schema ClusteringOrder      ]
+    [java.net                                         InetSocketAddress         ]
+    [clojure.core.async.impl.channels                 ManyToManyChannel         ]
+    [com.datastax.oss.driver.api.core                 CqlSession CqlIdentifier  ]
+    [com.datastax.oss.driver.api.querybuilder         SchemaBuilder             ]
+    [com.datastax.oss.driver.api.core.type            DataTypes                 ]
+    [com.datastax.oss.driver.api.core.metadata.schema ClusteringOrder           ]
     )
   (:gen-class))
 
@@ -27,10 +27,27 @@
           (CqlSession/builder)
           (.addContactPoint contactPoint)
           (.withLocalDatacenter datacenter)
-          (.build))}
-    )
+          (.build))})
   (catch Exception e
     {:error "Exception" :fn "getSession" :exception (.getMessage e)})))
+
+(defn getSessionWithKeyspace
+  [host port datacenter keyspace]
+  (try
+    (let
+      [
+       contactPoint (InetSocketAddress. host port)
+      ]
+      {:ok
+        (->
+          (CqlSession/builder)
+          (.addContactPoint contactPoint)
+          (.withLocalDatacenter datacenter)
+          (.withKeyspace (CqlIdentifier/fromCql keyspace))
+          (.build))})
+  (catch Exception e
+    {:error "Exception" :fn "getSession" :exception (.getMessage e)})))
+
 
 (defn getMetaData
   [session]
@@ -70,7 +87,7 @@
   [session keyspace]
   (let [statement
         (->
-          (SchemaBuilder/createTable (format "\"%s.table0\"" keyspace))
+          (SchemaBuilder/createTable "table0")
           (.ifNotExists)
           (.withPartitionKey            "userId"    DataTypes/UUID)
           (.withClusteringColumn        "deviceId"  DataTypes/UUID)
@@ -108,36 +125,43 @@
     (try
       (let
         [
-          config          (:ok configMaybe)
-          host            (get-in config [:cassandra-client :initial-server-host])
-          port            (get-in config [:cassandra-client :initial-server-port])
-          keyspace        (get-in config [:cassandra-client :keyspace])
-          dc              (get-in config [:cassandra-client :dc])
-          replication     (get-in config [:cassandra-client :replication-factor])
-          durable-writes  (get-in config [:cassandra-client :durable-writes])
-          _               (log/info "Connecting to cluster")
-          sessionMaybe    (getSession host port dc)
+          config              (:ok configMaybe)
+          host                (get-in config [:cassandra-client :initial-server-host])
+          port                (get-in config [:cassandra-client :initial-server-port])
+          keyspace            (get-in config [:cassandra-client :keyspace])
+          dc                  (get-in config [:cassandra-client :dc])
+          replication         (get-in config [:cassandra-client :replication-factor])
+          durable-writes      (get-in config [:cassandra-client :durable-writes])
+          _                   (log/info "Connecting to cluster")
+          initialSessionMaybe (getSession host port dc)
         ]
 
-        (if (:ok sessionMaybe)
-          (let [session (:ok sessionMaybe)]
+        (if (:ok initialSessionMaybe)
+          ; ok
+          (let [initial-session (:ok initialSessionMaybe)]
 
-            (clusterInfo session)
-
-            (log/info
-              (getExecutedStatement
-                (createKeyspace session keyspace {dc replication} durable-writes)))
+            (clusterInfo initial-session)
 
             (log/info
               (getExecutedStatement
-                (createTable0 session keyspace)))
-
-            (exit 0))
+                (createKeyspace initial-session keyspace {dc replication} durable-writes))))
+          ; err
           (do
-            (log/error "Cassandra session could not be established")
-            (log/error sessionMaybe)
+            (log/error "Initial Cassandra session could not be established")
+            (log/error initialSessionMaybe)
             (exit 1)))
-      )
+
+        ; try to connect to the testing keyspace previously created
+        (let [keyspacedSessionMaybe (getSessionWithKeyspace host port dc keyspace)]
+          (if (:ok keyspacedSessionMaybe)
+            (let [keyspacedSession (:ok keyspacedSessionMaybe)]
+              (do
+                (log/info (format "Connected to %s" keyspace))
+
+                (exit 0)))
+            (do
+              (log/error (format "Could not connect to %s" keyspace))
+              (exit 1)))))
 
      (catch Exception e
       (do
