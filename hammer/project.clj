@@ -7,7 +7,8 @@
   }
   :dependencies [
     [org.clojure/clojure                          "1.10.1"  ]
-    [com.datastax.cassandra/cassandra-driver-core "3.10.2"  ]
+    [com.datastax.oss/java-driver-core            "4.9.0"   ]
+    [com.datastax.oss/java-driver-query-builder   "4.9.0"   ]
     [org.clojure/core.async                       "1.3.610" ]
     [org.clojure/tools.cli                        "1.0.194" ]
     [org.clojure/tools.logging                    "1.1.0"   ]

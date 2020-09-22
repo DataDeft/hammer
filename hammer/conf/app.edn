@@ -5,7 +5,19 @@
     :channel-timeout 5000
   }
   :cassandra-client {
-    :keyspace "test"
-    :initial-server "10.243.128.4"
+    :keyspace "perftest"
+    :initial-server-host "10.243.128.4"
+    :initial-server-port 9042
+    :dc "dc1"
+    :replication-factor 3
+    :durable-writes true
+  }
+  :cassandra-tables {
+    :table0 {
+
+    }
+    :table1 {
+
+    }
   }
 }

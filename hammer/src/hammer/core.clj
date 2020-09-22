@@ -1,111 +1,145 @@
 (ns hammer.core
   (:require
-    [clojure.edn            :as edn                 ]
+    [hammer.utils           :refer :all             ]
     [clojure.core.async     :as async               ]
-    [clojure.tools.cli      :refer [parse-opts]     ]
-    [clojure.tools.logging  :as log                 ] )
+    [clojure.tools.logging  :as log                 ]
+    )
   ; Java
   (:import
-    [java.io                          File                                  ]
-    [java.util                        UUID                                  ]
-    [clojure.lang                     PersistentHashMap PersistentArrayMap  ]
-    [clojure.core.async.impl.channels ManyToManyChannel                     ]
-    [com.datastax.driver.core         Cluster Cluster$Builder               ] )
+    [java.net                                         InetSocketAddress    ]
+    [clojure.core.async.impl.channels                 ManyToManyChannel    ]
+    [com.datastax.oss.driver.api.core                 CqlSession           ]
+    [com.datastax.oss.driver.api.querybuilder         SchemaBuilder        ]
+    [com.datastax.oss.driver.api.core.type            DataTypes            ]
+    [com.datastax.oss.driver.api.core.metadata.schema ClusteringOrder      ]
+    )
   (:gen-class))
 
-
-
-(defn read-file
-  "Returns {:ok string } or {:error...}"
-  [^String file]
-  (try
-    (cond
-      (.isFile (File. file))
-        {:ok (slurp file) }                         ; if .isFile is true {:ok string}
-      :else
-        (throw (Exception. "Input is not a file"))) ;the input is not a file, throw exception
-  (catch Exception e
-    {:error "Exception" :fn "read-file" :exception (.getMessage e) }))) ; catch all exceptions
-
-(defn parse-edn-string
-  "Returns the Clojure data structure representation of s"
-  [s]
-  (try
-    {:ok (clojure.edn/read-string s)}
-  (catch Exception e
-    {:error "Exception" :fn "parse-config" :exception (.getMessage e)})))
-
-(defn exit [n]
-  (System/exit n))
-
-(defn read-config
-  "Returns the Clojure data structure version of the config file"
-  [file]
-  (let
-    [ file-string (read-file file) ]
-    (cond
-      (contains? file-string :ok)
-        ;this return the {:ok} or {:error} from parse-edn-string
-        (parse-edn-string (file-string :ok))
-      :else
-        ;the read-file operation returned an error
-        file-string)))
-
-(defn getCluster
-  [serverAddress]
-  (.build (.addContactPoint (Cluster$Builder.) serverAddress)))
-
 (defn getSession
-  [cluster db]
-  (.connect cluster db))
+  [host port datacenter]
+  (try
+    (let
+      [
+       contactPoint (InetSocketAddress. host port)
+      ]
+      {:ok
+        (->
+          (CqlSession/builder)
+          (.addContactPoint contactPoint)
+          (.withLocalDatacenter datacenter)
+          (.build))}
+    )
+  (catch Exception e
+    {:error "Exception" :fn "getSession" :exception (.getMessage e)})))
 
-(defn getConnectedHosts
+(defn getMetaData
   [session]
-  (for [host (.getConnectedHosts (.getState session))]
+  (for [host (.values (.getNodes (.getMetadata session)))]
     (str
       (.getDatacenter host)
-      " :: " (.getRack host)
-      " :: " (.getHostAddress (.getAddress host))
-      " :: " (.getState host)
-      " :: " (.toString (.getCassandraVersion host)))))
+      " : " (.getRack host)
+      " : " (.toString (.getEndPoint host))
+      " : " (.getState host)
+      " : " (.toString (.getCassandraVersion host))
+      " : " (.getOpenConnections host))))
 
-(defn runQuery
-  []
-  )
+(defn getKeyspaces
+  [session]
+  (for [keyspace (.values (.getKeyspaces (.getMetadata session)))]
+    (.toString (.getName keyspace))))
 
-(def cli-options
-  ;; An option with a required argument
-  [ ["-c" "--config FILE" "Config file location" :default "conf/app.edn"]
-    ["-h" "--help"] ])
+(defn createKeyspace
+  ;(createKeyspace "test" {"dc1" 3} true)
+  [session keyspaceName replicationMap durableWrites]
+  (let [statement (->
+                    (SchemaBuilder/createKeyspace keyspaceName)
+                    (.ifNotExists)
+                    (.withNetworkTopologyStrategy replicationMap)
+                    (.withDurableWrites durableWrites)
+                    (.build)) ]
+    ; creating keyspace
+    (.execute session statement)))
+
+(defn getExecutedStatement
+  [executed-statement]
+  (.getQuery
+    (.getStatement
+      (.getExecutionInfo executed-statement))))
+
+(defn createTable0
+  [session keyspace]
+  (let [statement
+        (->
+          (SchemaBuilder/createTable (format "\"%s.table0\"" keyspace))
+          (.ifNotExists)
+          (.withPartitionKey            "userId"    DataTypes/UUID)
+          (.withClusteringColumn        "deviceId"  DataTypes/UUID)
+          (.withColumn                  "hash"      DataTypes/TEXT)
+          (.withClusteringOrder         "deviceId"  ClusteringOrder/ASC)
+          (.withLZ4Compression          64 1.0)
+          (.withMemtableFlushPeriodInMs 1024)
+          (.build)
+          )]
+    (.execute session statement)))
+
+(defn clusterInfo
+  [session]
+  (log/info " :: Datacenter : Rack : Host+Port : State : # of connections")
+  (doseq
+    [m (getMetaData session)]
+    (log/info (str "Node :: " m)))
+  (doseq
+    [k (getKeyspaces session)]
+    (log/info (str "Keyspace :: " k))) )
 
 (defn -main
   [& args]
   (let
     [
-      opts    (parse-opts args cli-options)
-      config  (read-config (get-in opts [:options :config]))
+      opts          (getOpts args cli-options)
+      configMaybe   (read-config (get-in opts [:options :config]))
     ]
     (log/info "Starting up...")
-    (if (:ok config)
-      (log/info config)
+    (if (:ok configMaybe)
+      (log/info configMaybe)
       (do
-        (log/error config)
+        (log/error configMaybe)
         (exit 1)))
     (try
       (let
         [
-          initial-server  (get-in config [:ok :cassandra-client :initial-server])
-          keyspace        (get-in config [:ok :cassandra-client :keyspace])
+          config          (:ok configMaybe)
+          host            (get-in config [:cassandra-client :initial-server-host])
+          port            (get-in config [:cassandra-client :initial-server-port])
+          keyspace        (get-in config [:cassandra-client :keyspace])
+          dc              (get-in config [:cassandra-client :dc])
+          replication     (get-in config [:cassandra-client :replication-factor])
+          durable-writes  (get-in config [:cassandra-client :durable-writes])
           _               (log/info "Connecting to cluster")
-          cluster         (getCluster initial-server)
-          session         (getSession cluster keyspace)
+          sessionMaybe    (getSession host port dc)
         ]
 
-        (doseq [s (getConnectedHosts session)] (log/info s))
+        (if (:ok sessionMaybe)
+          (let [session (:ok sessionMaybe)]
 
-        (exit 0)
+            (clusterInfo session)
 
+            (log/info
+              (getExecutedStatement
+                (createKeyspace session keyspace {dc replication} durable-writes)))
+
+            (log/info
+              (getExecutedStatement
+                (createTable0 session keyspace)))
+
+            (exit 0))
+          (do
+            (log/error "Cassandra session could not be established")
+            (log/error sessionMaybe)
+            (exit 1)))
       )
-     (catch Exception e (log/error (str "caught exception: " (.getMessage e)))))))
 
-
+     (catch Exception e
+      (do
+        (log/error (str "caught exception: " (.getMessage e)))
+        (exit 1))))))
