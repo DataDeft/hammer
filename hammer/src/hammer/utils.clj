@@ -68,3 +68,12 @@
            (map #(str "." %) )
            distinct
            println))
+
+(defn uuid
+  "Returns a new java.util.UUID as string"
+  []
+  (.toString (UUID/randomUUID)))
+
+(defn rand-str
+  [len]
+  (apply str (take len (repeatedly #(char (+ (rand 26) 65))))))

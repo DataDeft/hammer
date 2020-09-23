@@ -6,10 +6,11 @@
     )
   ; Java
   (:import
+    [java.util                                        Arrays UUID               ]
     [java.net                                         InetSocketAddress         ]
     [clojure.core.async.impl.channels                 ManyToManyChannel         ]
     [com.datastax.oss.driver.api.core                 CqlSession CqlIdentifier  ]
-    [com.datastax.oss.driver.api.querybuilder         SchemaBuilder             ]
+    [com.datastax.oss.driver.api.querybuilder         SchemaBuilder QueryBuilder]
     [com.datastax.oss.driver.api.core.type            DataTypes                 ]
     [com.datastax.oss.driver.api.core.metadata.schema ClusteringOrder           ]
     )
@@ -48,7 +49,6 @@
   (catch Exception e
     {:error "Exception" :fn "getSession" :exception (.getMessage e)})))
 
-
 (defn getMetaData
   [session]
   (for [host (.values (.getNodes (.getMetadata session)))]
@@ -84,7 +84,7 @@
       (.getExecutionInfo executed-statement))))
 
 (defn createTable0
-  [session keyspace]
+  [session]
   (let [statement
         (->
           (SchemaBuilder/createTable "table0")
@@ -99,7 +99,7 @@
           )]
     (.execute session statement)))
 
-(defn clusterInfo
+(defn logClusterInfo
   [session]
   (log/info " :: Datacenter : Rack : Host+Port : State : # of connections")
   (doseq
@@ -108,6 +108,21 @@
   (doseq
     [k (getKeyspaces session)]
     (log/info (str "Keyspace :: " k))) )
+
+(defn deltaTimeMs
+  [start end]
+  (/ (- end start) 1000000.0))
+
+(defn insertIntoTable0
+  [session userid deviceid hash]
+  (let [ statement
+          (->
+            (QueryBuilder/insertInto "table0")
+            (.value "userid" (QueryBuilder/literal userid))
+            (.value "deviceid" (QueryBuilder/literal deviceid))
+            (.value "hash" (QueryBuilder/literal hash))
+            (.build)) ]
+    (.execute session statement)))
 
 (defn -main
   [& args]
@@ -132,6 +147,8 @@
           dc                  (get-in config [:cassandra-client :dc])
           replication         (get-in config [:cassandra-client :replication-factor])
           durable-writes      (get-in config [:cassandra-client :durable-writes])
+          iterations          (get-in config [:hammer :number-of-iterations])
+          runs                (get-in config [:hammer :number-of-runs])
           _                   (log/info "Connecting to cluster")
           initialSessionMaybe (getSession host port dc)
         ]
@@ -139,9 +156,7 @@
         (if (:ok initialSessionMaybe)
           ; ok
           (let [initial-session (:ok initialSessionMaybe)]
-
-            (clusterInfo initial-session)
-
+            (logClusterInfo initial-session)
             (log/info
               (getExecutedStatement
                 (createKeyspace initial-session keyspace {dc replication} durable-writes))))
@@ -156,8 +171,41 @@
           (if (:ok keyspacedSessionMaybe)
             (let [keyspacedSession (:ok keyspacedSessionMaybe)]
               (do
-                (log/info (format "Connected to %s" keyspace))
+                (log/info
+                  (format "Connected to %s" keyspace))
+                (log/info
+                  (getExecutedStatement (createTable0 keyspacedSession)))
 
+                (dotimes [r runs]
+                  (log/info (format "Starting run: %s" r))
+                  (let [^"[D" perf (make-array Double/TYPE iterations)]
+                    (dotimes [n iterations]
+                      (let
+                        [
+                          start     (System/nanoTime) ; nanoseconds
+                          userId    (UUID/randomUUID)
+                          deviceId  (UUID/randomUUID)
+                          hash      (rand-str 5000)
+                        ]
+                        (insertIntoTable0 keyspacedSession userId deviceId hash)
+                        (aset perf n (deltaTimeMs start (System/nanoTime)))))
+                      (log/info "Printing stats")
+                      (let
+                        [
+                          _           (Arrays/sort perf)
+                          totalTime   (.floatValue (areduce perf i ret 0 (+ ret (aget perf i))))
+                          performance (.intValue (* (/ iterations totalTime) iterations))
+                          p50         (aget perf (.intValue (* iterations 0.5)))
+                          p90         (aget perf (.intValue (* iterations 0.9)))
+                          p99         (aget perf (.intValue (* iterations 0.99)))
+                          p999        (aget perf (.intValue (* iterations 0.999)))
+                          p100        (aget perf (- iterations 1))
+                        ]
+                        (log/info (format "Finished %s iterations" iterations))
+                        (log/info (format "Total time %.2f" totalTime))
+                        (log/info (format "Performance %s ops/s" performance))
+                        (log/info (format "Percentiles :: p50 = %.1fms : p90 = %.1fms : p99 = %.1fms : p999 = %.1fms : p100 = %.1fms" p50 p90 p99 p999 p100))
+                        )))
                 (exit 0)))
             (do
               (log/error (format "Could not connect to %s" keyspace))
@@ -166,4 +214,5 @@
      (catch Exception e
       (do
         (log/error (str "caught exception: " (.getMessage e)))
+        (log/error e)
         (exit 1))))))

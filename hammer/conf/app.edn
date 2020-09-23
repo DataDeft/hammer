@@ -1,5 +1,7 @@
 {
   :hammer {
+    :number-of-iterations 1000
+    :number-of-runs 10
     :thread-count 5
     :thread-timeout 1000
     :channel-timeout 5000
