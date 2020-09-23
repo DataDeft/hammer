@@ -1,10 +1,10 @@
 {
   :hammer {
-    :number-of-iterations 1000
+    :number-of-iterations 10000
     :number-of-runs 10
-    :thread-count 5
+    :thread-count 8
     :thread-timeout 1000
-    :channel-timeout 5000
+    :channel-timeout 100000
   }
   :cassandra-client {
     :keyspace "perftest"

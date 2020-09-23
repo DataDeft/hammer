@@ -1,15 +1,13 @@
 (ns hammer.utils
-
   (:require
     [clojure.edn            :as edn                 ]
     [clojure.tools.cli      :refer [parse-opts]     ]
     [clojure.reflect        :refer [reflect]        ]
     )
-
   ; Java
   (:import
-    [java.io               File       ]
-    [java.util             UUID       ]
+    [java.io               File        ]
+    [java.util             UUID Random ]
     )
 
   )
@@ -77,3 +75,27 @@
 (defn rand-str
   [len]
   (apply str (take len (repeatedly #(char (+ (rand 26) 65))))))
+
+(defn rand-str2-slow
+  [len]
+  (let [leftLimit 97
+        rightLimit 122
+        random (Random.)
+        stringBuilder (StringBuilder. len)
+        diff (- rightLimit leftLimit)]
+    (dotimes [_ len]
+      (let [ch (char (.intValue (+ leftLimit (* (.nextFloat random) (+ diff 1)))))]
+        (.append stringBuilder ch)))
+    (.toString stringBuilder)))
+
+(defn rand-str2
+  ^String [^Long len]
+  (let [leftLimit 97
+        rightLimit 122
+        random (Random.)
+        stringBuilder (StringBuilder. len)
+        diff (- rightLimit leftLimit)]
+    (dotimes [_ len]
+      (let [ch (char (.intValue ^Double (+ leftLimit (* (.nextFloat ^Random random) (+ diff 1)))))]
+        (.append ^StringBuilder stringBuilder ch)))
+        (.toString ^StringBuilder stringBuilder)))
