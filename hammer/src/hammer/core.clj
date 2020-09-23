@@ -7,15 +7,16 @@
     )
   ; Java
   (:import
-    [java.util                                        Arrays UUID               ]
-    [java.net                                         InetSocketAddress         ]
-    [java.nio                                         ByteBuffer                ]
-    [com.datastax.oss.driver.api.core                 CqlSession CqlIdentifier
-                                                      DefaultConsistencyLevel   ]
-    [com.datastax.oss.driver.api.querybuilder         SchemaBuilder QueryBuilder]
-    [com.datastax.oss.driver.api.core.type            DataTypes                 ]
-    [com.datastax.oss.driver.api.core.metadata.schema ClusteringOrder           ]
-    )
+   [java.util                                        Arrays UUID]
+   [java.net                                         InetSocketAddress]
+   [java.nio                                         ByteBuffer]
+   [com.datastax.oss.driver.api.core                 CqlSession CqlIdentifier
+                                                     DefaultConsistencyLevel]
+   [com.datastax.oss.driver.api.querybuilder         SchemaBuilder QueryBuilder]
+   [com.datastax.oss.driver.internal.core.session    DefaultSession]
+   [com.datastax.oss.driver.internal.core.cql        DefaultPreparedStatement]
+   [com.datastax.oss.driver.api.core.type            DataTypes]
+   [com.datastax.oss.driver.api.core.metadata.schema ClusteringOrder])
   (:gen-class))
 
 (defn getSession
@@ -139,7 +140,7 @@
             (.value "hash"      (QueryBuilder/literal hash))
             (.value "bob"       bob)
             (.build)) ]
-    (.execute session statement)))
+    (.execute ^DefaultSession session statement)))
 
 (defn getInsertStatementBind 
   []
@@ -155,9 +156,9 @@
 (defn insertIntoTable0
   [session userid deviceid hash bob]
   (let [statement (getInsertStatementBind)
-        prepared  (.prepare session statement)
-        bound     (.bind prepared (into-array Object [userid deviceid hash (ByteBuffer/wrap bob)]))]
-    (.execute session bound)))
+        prepared  (.prepare ^DefaultSession session statement)
+        bound     (.bind ^DefaultPreparedStatement prepared (into-array Object [userid deviceid hash (ByteBuffer/wrap bob)]))]
+    (.execute ^DefaultSession session bound)))
 
 (defn insertTaskOneSession
   [session runs iterations stat-chan]
