@@ -17,7 +17,7 @@
   }
   :cassandra-tables {
     :table0 {
-
+      :hash-size 50
     }
     :table1 {
 

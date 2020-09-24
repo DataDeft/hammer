@@ -8,9 +8,7 @@
   (:import
     [java.io               File        ]
     [java.util             UUID Random ]
-    )
-
-  )
+    ))
 
 (defn read-file
   "Returns {:ok string } or {:error...}"
@@ -50,11 +48,12 @@
 
 (def cli-options
   ;; An option with a required argument
-  [ ["-c" "--config FILE" "Config file location" :default "conf/app.edn"]
-    ["-h" "--help"] ])
+  [["-c" "--config FILE" "Config file location" :default "conf/app.edn"]
+   ["-m" "--mode MODE" "Operation mode: write or read, mixed will be supported soon" :default "write"]
+   ["-h" "--help"]])
 
 (defn getOpts
-  [args cli-options]
+  [args]
   (parse-opts args cli-options))
 
 (defn all-methods [x]

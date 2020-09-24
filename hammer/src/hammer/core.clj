@@ -24,6 +24,8 @@
 
 (log/info (format "clojure.core.async.pool-size %s" (System/getProperty "clojure.core.async.pool-size")))
 
+(def fs (System/getProperty "file.separator"))
+
 (defn getSession
   [host port datacenter]
   (try
@@ -123,20 +125,6 @@
   [m]
   (format "%.1fms" m))
 
-(defn getConfig
-  [args]
-  (let
-    [ opts          (getOpts args cli-options)
-      configMaybe   (read-config (get-in opts [:options :config])) ]
-    (log/info "Starting up...")
-    (if (:ok configMaybe)
-      (do
-        (log/info configMaybe)
-        configMaybe)
-      (do
-        (log/error configMaybe)
-        (exit 1)))))
-
 (defn insertIntoTable0NoBind
   [session userid deviceid hash bob]
   (let [ statement
@@ -148,6 +136,13 @@
             (.value "bob"       bob)
             (.build)) ]
     (.execute ^DefaultSession session statement)))
+
+(defn writeToLocalDisk 
+  [s]
+  (try
+    (.createNewFile (File. (str "uids" fs s)))
+  (catch Exception e
+    (log/info (format "Exception %s" (.getMessage e))))))
 
 (defn getInsertStatementBind 
   []
@@ -163,6 +158,7 @@
 (defn insertIntoTable0
   [session userid deviceid hash bob]
   (try
+    (writeToLocalDisk userid)
     (let [statement (getInsertStatementBind)
           prepared  (.prepare ^DefaultSession session statement)
           bound     (.bind ^DefaultPreparedStatement prepared (into-array Object [userid deviceid hash (ByteBuffer/wrap bob)]))]
@@ -173,7 +169,7 @@
     (log/info (format "Unknown Exception %s" (.getMessage e))))))
 
 (defn insertTaskOneSession
-  [session runs iterations stat-chan]
+  [session runs iterations stat-chan hashSize]
   (dotimes [r runs]
     (try
       (let [^"[D" perf (make-array Double/TYPE iterations)]
@@ -183,7 +179,7 @@
           (let [start     (System/nanoTime) ; nanoseconds
                 userId    (UUID/randomUUID)
                 deviceId  (UUID/randomUUID)
-                hash      (rand-str2 5000)
+                hash      (rand-str2 hashSize)
                 bob       (.getBytes hash)]
             (insertIntoTable0 session userId deviceId hash bob)
             (aset perf n (deltaTimeMs start (System/nanoTime)))))
@@ -202,8 +198,13 @@
 (defn -main
   [& args]
   (try
-    (let [configMaybe             (getConfig args)
-          config                  (:ok configMaybe)
+    (let [options                 (getOpts args)
+          _                       (log/info options)
+          config-file             (get-in options [:options :config])
+          test-mode               (get-in options [:options :mode])
+          _                       (log/info test-mode)
+          config                  (:ok (read-config config-file))
+          _                       (if (nil? config) (exit 1) (log/info config))
           host                    (get-in config [:cassandra-client :initial-server-host])
           port                    (get-in config [:cassandra-client :initial-server-port])
           keyspace                (get-in config [:cassandra-client :keyspace])
@@ -215,6 +216,7 @@
           channel-timeout         (get-in config [:hammer :channel-timeout])
           thread-count            (get-in config [:hammer :thread-count])
           application-config-path (get-in config [:cassandra-client :application-config-path])
+          hash-size               (get-in config [:cassandra-tables :table0 :hash-size])
           _                   (log/info "Connecting to cluster")
           initialSessionMaybe (getSession host port dc)]
       ; creating keyspace
@@ -237,11 +239,15 @@
         [ stat-chan (as/chan 8)
          runResults (atom {})
          insertSession (:ok (getSessionWithKeyspace host port dc keyspace application-config-path)) ]
-        ; worker threads
-        (dotimes [_ thread-count]
-          (as/thread
-            (Thread/sleep 100)
-            (insertTaskOneSession insertSession runs iterations stat-chan)))
+
+        (if (= test-mode "write")
+        
+          (dotimes [_ thread-count]
+            (as/thread
+              (Thread/sleep 100)
+              (insertTaskOneSession insertSession runs iterations stat-chan hash-size)))
+          
+          (log/info "Read"))
 
         ; main thread
         (while true
