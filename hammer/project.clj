@@ -12,7 +12,9 @@
                  [org.clojure/tools.cli                        "1.0.194"]
                  [org.clojure/tools.logging                    "1.1.0"]
                  [ch.qos.logback/logback-classic               "1.2.3"]
-                 [criterium "0.4.6"]]
+                 [org.lz4/lz4-java                             "1.7.1"]
+                 [criterium                                    "0.4.6"]
+                 [org.clojure/test.check                       "1.1.0"]]
   :exclusions [
     javax.mail/mail
     javax.jms/jms

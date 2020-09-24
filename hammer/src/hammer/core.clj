@@ -1,23 +1,28 @@
 (ns hammer.core
   (:require
-    [hammer.utils       :refer [exit read-config getOpts
-                                cli-options rand-str rand-str2]]
-    [clojure.core.async :as as     ]
-    [clojure.tools.logging :as log ]
-    )
+   [hammer.utils       :refer [exit read-config getOpts
+                               cli-options rand-str rand-str2]]
+   [clojure.core.async :as as]
+   [clojure.tools.logging :as log])
   ; Java
   (:import
    [java.util                                        Arrays UUID]
+   [java.io                                          File]
    [java.net                                         InetSocketAddress]
    [java.nio                                         ByteBuffer]
    [com.datastax.oss.driver.api.core                 CqlSession CqlIdentifier
-                                                     DefaultConsistencyLevel]
+                                                     DefaultConsistencyLevel DriverTimeoutException]
+   [com.datastax.oss.driver.api.core.config          DriverConfigLoader]
    [com.datastax.oss.driver.api.querybuilder         SchemaBuilder QueryBuilder]
    [com.datastax.oss.driver.internal.core.session    DefaultSession]
    [com.datastax.oss.driver.internal.core.cql        DefaultPreparedStatement]
    [com.datastax.oss.driver.api.core.type            DataTypes]
    [com.datastax.oss.driver.api.core.metadata.schema ClusteringOrder])
   (:gen-class))
+
+(System/setProperty "clojure.core.async.pool-size" "2")
+
+(log/info (format "clojure.core.async.pool-size %s" (System/getProperty "clojure.core.async.pool-size")))
 
 (defn getSession
   [host port datacenter]
@@ -33,14 +38,16 @@
     {:error "Exception" :fn "getSession" :exception (.getMessage e)})))
 
 (defn getSessionWithKeyspace
-  [host port datacenter keyspace]
+  [host port datacenter keyspace applicationConfig]
   (try
-    (let [ contactPoint (InetSocketAddress. host port) ]
+    (let [ contactPoint (InetSocketAddress. host port)
+           configFile (File. applicationConfig)        ]
       {:ok
        (->
         (CqlSession/builder)
         (.addContactPoint contactPoint)
         (.withLocalDatacenter datacenter)
+        (.withConfigLoader (DriverConfigLoader/fromFile configFile))
         (.withKeyspace (CqlIdentifier/fromCql keyspace))
         (.build))})
   (catch Exception e
@@ -155,10 +162,15 @@
 
 (defn insertIntoTable0
   [session userid deviceid hash bob]
-  (let [statement (getInsertStatementBind)
-        prepared  (.prepare ^DefaultSession session statement)
-        bound     (.bind ^DefaultPreparedStatement prepared (into-array Object [userid deviceid hash (ByteBuffer/wrap bob)]))]
-    (.execute ^DefaultSession session bound)))
+  (try
+    (let [statement (getInsertStatementBind)
+          prepared  (.prepare ^DefaultSession session statement)
+          bound     (.bind ^DefaultPreparedStatement prepared (into-array Object [userid deviceid hash (ByteBuffer/wrap bob)]))]
+      (.execute ^DefaultSession session bound))
+  (catch DriverTimeoutException e
+    (log/info (format "DriverTimeoutException %s" (.getMessage e))))
+  (catch Exception e
+    (log/info (format "Unknown Exception %s" (.getMessage e))))))
 
 (defn insertTaskOneSession
   [session runs iterations stat-chan]
@@ -190,28 +202,31 @@
 (defn -main
   [& args]
   (try
-    (let [ configMaybe         (getConfig args)
-           config              (:ok configMaybe)
-           host                (get-in config [:cassandra-client :initial-server-host])
-           port                (get-in config [:cassandra-client :initial-server-port])
-           keyspace            (get-in config [:cassandra-client :keyspace])
-           dc                  (get-in config [:cassandra-client :dc])
-           replication         (get-in config [:cassandra-client :replication-factor])
-           durable-writes      (get-in config [:cassandra-client :durable-writes])
-           iterations          (get-in config [:hammer :number-of-iterations])
-           runs                (get-in config [:hammer :number-of-runs])
-           channel-timeout     (get-in config [:hammer :channel-timeout])
-           thread-count        (get-in config [:hammer :thread-count])
-           _                   (log/info "Connecting to cluster")
-           initialSessionMaybe (getSession host port dc)]
+    (let [configMaybe             (getConfig args)
+          config                  (:ok configMaybe)
+          host                    (get-in config [:cassandra-client :initial-server-host])
+          port                    (get-in config [:cassandra-client :initial-server-port])
+          keyspace                (get-in config [:cassandra-client :keyspace])
+          dc                      (get-in config [:cassandra-client :dc])
+          replication             (get-in config [:cassandra-client :replication-factor])
+          durable-writes          (get-in config [:cassandra-client :durable-writes])
+          iterations              (get-in config [:hammer :number-of-iterations])
+          runs                    (get-in config [:hammer :number-of-runs])
+          channel-timeout         (get-in config [:hammer :channel-timeout])
+          thread-count            (get-in config [:hammer :thread-count])
+          application-config-path (get-in config [:cassandra-client :application-config-path])
+          _                   (log/info "Connecting to cluster")
+          initialSessionMaybe (getSession host port dc)]
       ; creating keyspace
       (if (:ok initialSessionMaybe)
         ; ok
         (let [initial-session (:ok initialSessionMaybe)]
           (logClusterInfo initial-session)
           (log/info
-            (getExecutedStatement
-              (createKeyspace initial-session keyspace {dc replication} durable-writes))))
+           (getExecutedStatement
+            (createKeyspace initial-session keyspace {dc replication} durable-writes)))
+          (log/info "Closing initial session")
+          (.close initial-session))
         ; err
         (do
           (log/error "Initial Cassandra session could not be established")
@@ -221,7 +236,7 @@
       (let
         [ stat-chan (as/chan 8)
          runResults (atom {})
-         insertSession (:ok (getSessionWithKeyspace host port dc keyspace)) ]
+         insertSession (:ok (getSessionWithKeyspace host port dc keyspace application-config-path)) ]
         ; worker threads
         (dotimes [_ thread-count]
           (as/thread
@@ -248,13 +263,14 @@
                           p999        (aget perf (.intValue (* (* thread-count iterations) 0.999)))
                           p100        (aget perf (- (* thread-count iterations) 1))
                         ]
-                        (swap! runResults assoc-in [msg-run] {:totalTime (f totalTime) :performance performance :percentiles {:p50 (f p50) :p90 (f p90) :p99 (f p99) :999 (f p999) :p100 (f p100)}})
-                        (log/info @runResults))
+                        (swap! runResults assoc-in [msg-run] {:totalTime totalTime :performance performance :percentiles {:p50 p50 :p90 p90 :p99 p99 :999 p999 :p100 p100}})
+                        (log/info (get-in @runResults [msg-run])))
                       ; else
                       (log/debug "Got message from a thread but the measurement is not complete yet")))
                   ;else - timeout
                   (do
                     (log/info "Channel timed out. Stopping...")
+                    (doseq [r @runResults] (log/info r))
                     (exit 0)))))))))
     (catch Exception e
       (log/error (str "caught exception: " (.getMessage e)))
