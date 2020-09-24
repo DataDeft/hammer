@@ -1,6 +1,6 @@
 # hammer
 
-I thought it will a simple performance tool for Cassandra, running simple workloads as loadtest. It ended up being a complete rabbithole investigation into the internals of the Cassandra driver. Still no luck with performance. It is terribly slow.
+I thought it will a simple performance tool for Cassandra, running simple workloads as loadtest. It ended up being a complete rabbithole investigation into the internals of the Cassandra driver. Still no luck with performance. It is somewhat slow.
 
 ## Usage
 
