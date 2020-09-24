@@ -27,7 +27,6 @@ bash run.sh
 ## Flame
 
 ![Flame](./flame.svg)
-<img src="./flame.svg">
 
 
 ## License
