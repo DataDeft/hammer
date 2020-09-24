@@ -24,6 +24,12 @@ java \
 bash run.sh
 ```
 
+## Flame
+
+![Flame](./flame.svg)
+<img src="./flame.svg">
+
+
 ## License
 
 Copyright <2020> <LambdaInsight SARL>
