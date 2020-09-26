@@ -80,6 +80,7 @@
           (SchemaBuilder/createKeyspace keyspaceName)
           (.ifNotExists)
           (.withNetworkTopologyStrategy replicationMap)
+          
           (.withDurableWrites durableWrites)
           (.build))]
     ; creating keyspace
