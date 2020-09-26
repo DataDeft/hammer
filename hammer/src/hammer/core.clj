@@ -1,19 +1,20 @@
 (ns hammer.core
   (:require
    [hammer.utils       :refer [exit read-config getOpts
-                               cli-options rand-str rand-str2]]
+                               rand-str2]]
    [clojure.core.async :as as]
    [clojure.tools.logging :as log])
   ; Java
   (:import
-   [java.util                                        Arrays UUID]
+   [java.util                                        Arrays UUID Random]
    [java.io                                          File]
    [java.net                                         InetSocketAddress]
    [java.nio                                         ByteBuffer]
    [com.datastax.oss.driver.api.core                 CqlSession CqlIdentifier
                                                      DefaultConsistencyLevel DriverTimeoutException]
    [com.datastax.oss.driver.api.core.config          DriverConfigLoader]
-   [com.datastax.oss.driver.api.querybuilder         SchemaBuilder QueryBuilder]
+   [com.datastax.oss.driver.api.querybuilder         SchemaBuilder QueryBuilder
+                                                     SchemaBuilder$RowsPerPartition]
    [com.datastax.oss.driver.internal.core.session    DefaultSession]
    [com.datastax.oss.driver.internal.core.cql        DefaultPreparedStatement]
    [com.datastax.oss.driver.api.core.type            DataTypes]
@@ -92,20 +93,25 @@
 
 (defn createTable0
   [session]
-  (let [ statement
-         (->
-          (SchemaBuilder/createTable "table0")
-          (.ifNotExists)
-          (.withPartitionKey            "userId"    DataTypes/UUID)
-          (.withClusteringColumn        "deviceId"  DataTypes/UUID)
-          (.withColumn                  "hash"      DataTypes/TEXT)
-          (.withColumn                  "bob"       DataTypes/BLOB)
-          (.withClusteringOrder         "deviceId"  ClusteringOrder/ASC)
-          (.withLZ4Compression          64 1.0)
-          (.withMemtableFlushPeriodInMs 1024)
-          (.build)
-          )]
-    (.execute session statement)))
+  (try
+    (let [statement
+          (->
+           (SchemaBuilder/createTable "table0")
+           (.ifNotExists)
+           (.withPartitionKey            "userId"    DataTypes/UUID)
+           (.withClusteringColumn        "deviceId"  DataTypes/UUID)
+           (.withColumn                  "hash"      DataTypes/TEXT)
+           (.withColumn                  "bob"       DataTypes/BLOB)
+           (.withClusteringOrder         "deviceId"  ClusteringOrder/ASC)
+           (.withLZ4Compression          4 0.8)
+           (.withMemtableFlushPeriodInMs 1024)
+           (.withCaching true (SchemaBuilder$RowsPerPartition/ALL))
+           (.build))]
+      (log/info
+       (getExecutedStatement (.execute session statement))))
+  (catch Exception e
+    (log/info (format "Exception %s" (.getMessage e)))
+    (exit 1))))
 
 (defn logClusterInfo
   [session]
@@ -166,7 +172,8 @@
   (catch DriverTimeoutException e
     (log/info (format "DriverTimeoutException %s" (.getMessage e))))
   (catch Exception e
-    (log/info (format "Unknown Exception %s" (.getMessage e))))))
+    (log/info (format "Unknown Exception %s" (.getMessage e)))
+    (exit 1))))
 
 (defn insertTaskOneSession
   [session runs iterations stat-chan hashSize]
@@ -194,6 +201,49 @@
       (log/error (str "caught exception: " (.getMessage e)))
       (log/error e)
       {:err :err}))))
+
+(defn getSelectStatement
+  []
+  (->
+   (QueryBuilder/selectFrom "table0")
+   (.column "bob")
+   (.whereColumn "userid")
+   (.isEqualTo (QueryBuilder/bindMarker))
+   (.build)))
+
+(defn selectFromTable0 
+  [session userid]
+  (try
+    (let [statement (getSelectStatement)
+          prepared  (.prepare ^DefaultSession session statement)
+          bound     (.bind ^DefaultPreparedStatement prepared (into-array Object [(UUID/fromString userid)]))]
+      (.execute ^DefaultSession session bound))
+    (catch DriverTimeoutException e
+      (log/info (format "DriverTimeoutException %s" (.getMessage e))))
+    (catch Exception e
+      (log/info (format "Unknown Exception %s" (.getMessage e))))))
+
+(defn selectTaskOneSession
+ [session runs iterations stat-chan files]
+ (let [rand (Random.)
+       len (count files)]
+   (dotimes [r runs]
+     (try
+       (let [^"[D" perf (make-array Double/TYPE iterations)]
+         (log/info (format "Starting run: %s in thread: %s" r (.getName (Thread/currentThread))))
+         (dotimes [n iterations]
+           (let [start     (System/nanoTime)]
+             (selectFromTable0 session (aget files (.nextInt ^Random rand len)))
+             (aset perf n (deltaTimeMs start (System/nanoTime)))))
+         (log/info (format "Finished run: %s in thread: %s" r (.getName (Thread/currentThread))))
+       (as/>!!
+        stat-chan
+        {:thread-name (.getName (Thread/currentThread)) :run r :perf perf}))
+     {:ok :ok}
+     (catch Exception e
+       (log/error (str "caught exception: " (.getMessage e)))
+       (log/error e)
+       {:err :err})))))
 
 (defn -main
   [& args]
@@ -238,16 +288,24 @@
       (let
         [ stat-chan (as/chan 8)
          runResults (atom {})
-         insertSession (:ok (getSessionWithKeyspace host port dc keyspace application-config-path)) ]
+         testSession (:ok (getSessionWithKeyspace host port dc keyspace application-config-path)) ]
 
         (if (= test-mode "write")
-        
-          (dotimes [_ thread-count]
-            (as/thread
-              (Thread/sleep 100)
-              (insertTaskOneSession insertSession runs iterations stat-chan hash-size)))
-          
-          (log/info "Read"))
+          (do
+            (log/info "Test mode: Write")
+            (createTable0 testSession)
+            (dotimes [_ thread-count]
+              (as/thread
+                (Thread/sleep 100)
+                (insertTaskOneSession testSession runs iterations stat-chan hash-size))))
+          (do
+            (log/info "Test mode: Read")
+            (let [files (.list (File. "uids"))]
+              (log/info (format "Number of files %s" (count files)))
+              (dotimes [_ thread-count]
+                (as/thread
+                  (Thread/sleep 100)
+                  (selectTaskOneSession testSession runs iterations stat-chan files))))))
 
         ; main thread
         (while true
