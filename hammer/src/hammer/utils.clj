@@ -50,6 +50,7 @@
   ;; An option with a required argument
   [["-c" "--config FILE" "Config file location" :default "conf/app.edn"]
    ["-m" "--mode MODE" "Operation mode: write or read, mixed will be supported soon" :default "write"]
+   ["-d" "--database DATABASE" "Database flavor to test: Cassandra/Riak" :default "cassandra"]
    ["-h" "--help"]])
 
 (defn getOpts

@@ -21,7 +21,9 @@
           _                       (log/info options)
           config-file             (get-in options [:options :config])
           test-mode               (get-in options [:options :mode])
-          _                       (log/info test-mode)
+          _                       (log/info (format "Test mode: %s" test-mode))
+          database                (get-in options [:options :database])
+          _                       (log/info (format "Database flavor: %s" database))
           config                  (:ok (read-config config-file))
           _                       (if (nil? config) (exit 1) (log/info config))
           host                    (get-in config [:cassandra-client :initial-server-host])
@@ -59,22 +61,31 @@
          runResults (atom {})
          testSession (:ok (cass/getSessionWithKeyspace host port dc keyspace application-config-path)) ]
 
-        (if (= test-mode "write")
+        (cond
+          (= database "cassandra")
+            (if (= test-mode "write")
+              (do
+                (log/info "Test mode: Write")
+                (cass/createTable0 testSession)
+                (dotimes [_ thread-count]
+                  (as/thread
+                    (Thread/sleep 100)
+                    (cass/insertTaskOneSession testSession runs iterations stat-chan hash-size))))
+            ; else
+              (do
+                (log/info "Test mode: Read")
+                (let [files (.list (File. "uids"))]
+                  (log/info (format "Number of files %s" (count files)))
+                  (dotimes [_ thread-count]
+                    (as/thread
+                      (Thread/sleep 100)
+                      (cass/selectTaskOneSession testSession runs iterations stat-chan files))))))
+          (= database "riak")
+            (exit 0)
+          :else
           (do
-            (log/info "Test mode: Write")
-            (cass/createTable0 testSession)
-            (dotimes [_ thread-count]
-              (as/thread
-                (Thread/sleep 100)
-                (cass/insertTaskOneSession testSession runs iterations stat-chan hash-size))))
-          (do
-            (log/info "Test mode: Read")
-            (let [files (.list (File. "uids"))]
-              (log/info (format "Number of files %s" (count files)))
-              (dotimes [_ thread-count]
-                (as/thread
-                  (Thread/sleep 100)
-                  (cass/selectTaskOneSession testSession runs iterations stat-chan files))))))
+            (log/info "Nor Cassandra or Riak??")
+            (exit 0)))
 
         ; main thread
         (while true
