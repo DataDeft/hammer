@@ -1,0 +1,5 @@
+---
+- name: REMOVING ALL THE DATA!!!
+  file: path=/data state=absent
+  become: yes
+  tags: removing_all_the_data

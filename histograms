@@ -45,3 +45,21 @@ Percentile  SSTables     Write Latency      Read Latency    Partition Size      
 99%             1.00             24.60            105.78               179                 2
 Min             1.00              1.60             11.87               150                 2
 Max             1.00           4866.32           1955.67               179                 2
+
+64 tokens, 4k compression blocks, 1B rows
+perftest/table0 histograms
+Percentile  SSTables     Write Latency      Read Latency    Partition Size        Cell Count
+                              (micros)          (micros)           (bytes)
+50%             1.00              9.89            126.93               179                 2
+75%             1.00             11.86            152.32               179                 2
+95%             1.00             17.08            182.79             11864                 2
+98%             1.00             24.60            219.34             11864                 2
+99%             1.00             42.51            379.02             11864                 2
+Min             0.00              2.30             51.01               150                 2
+Max             1.00            315.85           2346.80             11864                 2
+
+
+
+
+
+

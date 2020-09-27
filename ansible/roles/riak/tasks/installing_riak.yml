@@ -1,0 +1,19 @@
+---
+- name: Installing Riak
+  yum: name=riak state=present
+  become: yes
+
+- name: Rendering Riak configuration
+  template: src=riak.conf.j2 dest={{ riak_config_file }} owner=root group=root mode=0644
+  become: yes
+
+- name: Checking data folder
+  file:
+    path: "{{ data_folder }}"
+    state: directory
+  register: data_folder_created
+  become: yes
+
+- name: Assigning ownership to riak user
+  command: chown riak:riak "{{ data_folder }}"
+  become: yes

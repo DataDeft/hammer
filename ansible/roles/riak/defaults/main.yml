@@ -1,0 +1,6 @@
+solr_schema_home: '/etc/riak/schema'
+riak_user: 'riak'
+riak_group: 'riak'
+solr_schema_home_permission: '0755'
+basho_repository_file: '/etc/yum.repos.d/basho.repo'
+riak_config_file: '/etc/riak/riak.conf'

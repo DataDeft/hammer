@@ -1,0 +1,10 @@
+
+# DO NOT UNCOMMENT THIS UNLESS YOU WANT TO DELETE ALL OF YOUR DATA
+#- include: removing_all_the_data.yml
+# DO NOT UNCOMMENT THIS UNLESS YOU WANT TO DELETE ALL OF YOUR DATA
+
+# Order matters
+- include: basho_repo.yml
+- include: installing_riak.yml
+- include: starting_up.yml
+- include: creating_cluster.yml

@@ -1,0 +1,40 @@
+---
+- name: Checking ring
+  command: /usr/sbin/riak-admin member-status | grep valid | wc -l
+  register: member_status
+  changed_when: false
+  run_once: true
+  delegate_to: "{{ riak_server_ext }}"
+  become: yes
+  tags: creating_cluster
+
+- name: Joining nodes
+  command: /usr/sbin/riak-admin cluster join {{ env }}_riak@{{ riak_server_int }}
+  when: member_status.stdout == "1"
+  failed_when: false
+  become: yes
+  tags: creating_cluster
+
+- name: Plan changes
+  command: /usr/sbin/riak-admin cluster plan
+  when: member_status.stdout == "1"
+  failed_when: false
+  run_once: true
+  delegate_to: "{{ riak_server_ext }}"
+  become: yes
+  tags: creating_cluster
+
+- name: Commit changes
+  command: /usr/sbin/riak-admin cluster commit
+  when: member_status.stdout == "1"
+  failed_when: false
+  run_once: true
+  delegate_to: "{{ riak_server_ext }}"
+  become: yes
+  tags: creating_cluster
+
+- name: Wait 10 seconds
+  command: sleep 20
+  when: member_status.stdout == "1"
+  run_once: true
+  delegate_to: "{{ riak_server_ext }}"

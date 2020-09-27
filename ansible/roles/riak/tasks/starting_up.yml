@@ -1,0 +1,5 @@
+---
+- name: Starting Riak if it is not running
+  service: name=riak state=started
+  become: yes
+  tags: starting_up

@@ -1,0 +1,24 @@
+- name: Checking Basho repository exists
+  stat:
+    path: "{{ basho_repository_file }}"
+  register: basho_repository_created
+
+- name: Rendering Basho repository
+  template:
+    src: basho_riak.repo.j2
+    dest: "{{ basho_repository_file }}"
+    owner: root
+    group: root
+    mode: 0644
+  when: basho_repository_created.stat.exists == false
+  become: yes
+
+- name: Checking if Basho GPG key is already imported
+  stat:
+    path: /var/lib/yum/repos/x86_64/7/basho_riak/gpgdir
+  register: basho_gpg_imported
+
+- name: Importing GPG key for Basho repository
+  command: yum search riak -y
+  when: basho_gpg_imported.stat.exists == false
+  become: yes

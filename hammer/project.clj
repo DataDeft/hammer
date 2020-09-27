@@ -14,7 +14,8 @@
                  [ch.qos.logback/logback-classic               "1.2.3"]
                  [org.lz4/lz4-java                             "1.7.1"]
                  [criterium                                    "0.4.6"]
-                 [org.clojure/test.check                       "1.1.0"]]
+                 [org.clojure/test.check                       "1.1.0"]
+                 [com.basho.riak/riak-client                   "2.1.1"]]
   :exclusions [
     javax.mail/mail
     javax.jms/jms
