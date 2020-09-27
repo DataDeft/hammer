@@ -1,0 +1,118 @@
+- name: Removing requiretty
+  lineinfile: dest=/etc/sudoers line='Defaults    requiretty' state=absent
+  become: yes
+  vars:
+    ansible_ssh_pipelining: no
+
+- name: Setting up /etc/environment
+  lineinfile: dest=/etc/environment line={{ item.line }}  state=present
+  with_items:
+    - {'line': 'LANG=en_US.utf-8'}
+    - {'line': 'LC_ALL=en_US.utf-8'}
+  become: yes
+
+- name: Check if tools are installed
+  stat: path={{ item.path }}
+  with_items:
+    - {'name': mlocate,         'path': /usr/bin/updatedb}
+    - {'name': vim,             'path': /usr/bin/vim}
+    - {'name': screen,          'path': /usr/bin/screen}
+    - {'name': net-tools,       'path': /usr/sbin/ifconfig}
+    - {'name': bind-utils,      'path': /usr/bin/host}
+    - {'name': ntp,             'path': /usr/sbin/ntpq}
+    - {'name': maven,           'path': /nonexistent}
+    - {'name': dstat,           'path': /nonexistent}
+    - {'name': epel-release,    'path': /nonexistent}
+    - {'name': ansible,         'path': /nonexistent}
+    - {'name': rsync,           'path': /nonexistent}
+  register: tools_installed
+  become: yes
+
+- name: Installing tools
+  yum: name={{ item.item.name }} state=present
+  with_items: "{{ tools_installed.results }}"
+  when: item.stat.exists == false
+  become: yes
+
+- name: Installing python-pip
+  yum:
+    name: "{{ item.name }}"
+  with_items:
+    - {'name': python-pip,      'path': /nonexistent}
+  become: yes
+
+- name: Rendering templates
+  template: src={{ item.name }}.j2 dest={{ item.path }} owner=root group=root mode=0644
+  with_items:
+    - {'name': ntp.conf,    'path': /etc/ntp.conf             }
+    - {'name': limits.conf, 'path': /etc/security/limits.conf }
+    - {'name': grub.conf,   'path': /etc/default/grub         }
+  become: yes
+
+- name: Re-creating grub.cfg
+  command: /usr/sbin/grub2-mkconfig -o /boot/grub2/grub.cfg
+  become: yes
+
+- name: Removing limits.d
+  file: path=/etc/security/limits.d state=absent
+  become: yes
+
+- name: Make sure NTP is started up
+  service: name=ntpd state=started enabled=yes
+  become: yes
+
+- name: Disables ipv6
+  sysctl: name={{ item.name }} value={{ item.value }} state=present sysctl_set=yes reload=yes
+  become: yes
+  with_items:
+    - {'name': net.ipv6.conf.all.disable_ipv6,        'value': 1}
+    - {'name': net.ipv6.conf.default.disable_ipv6,    'value': 1}
+  ignore_errors: yes 
+
+- name: Ensure the firewall is disabled
+  become: yes
+  service: name=firewalld state=stopped enabled=no
+  ignore_errors: yes
+
+- name: NSA hack disabled
+  selinux: state=disabled
+  become: yes
+  changed_when: False
+
+- name: Rendering sysctl
+  sysctl: name={{ item.name }} value={{ item.value }} state=present
+  with_items:
+    - {'name': vm.swappiness,                 'value': 5                      }
+    - {'name': net.core.rmem_max,             'value': 16777216               }
+    - {'name': net.core.wmem_max,             'value': 16777216               }
+    - {'name': net.ipv4.tcp_rmem,             'value': '4096 87380 16777216'  }
+    - {'name': net.ipv4.tcp_wmem,             'value': '4096 87380 16777216'  }
+    - {'name': net.ipv4.tcp_tw_reuse,         'value': 1                      }
+    - {'name': net.ipv4.tcp_tw_recycle,       'value': 1                      }
+    - {'name': net.ipv4.tcp_fin_timeout,      'value': 30                     }
+    - {'name': net.ipv4.tcp_syncookies,       'value': 1                      }
+    - {'name': net.ipv4.tcp_max_syn_backlog,  'value': 65536                  }
+    - {'name': vm.max_map_count,              'value': 1000000                }
+  become: yes
+
+- name: Installing PIP packages
+  pip:
+    name: pssh
+  become: True
+
+- name: Allow 'wheel' group to have passwordless sudo
+  lineinfile:
+    dest: /etc/sudoers
+    state: present
+    regexp: '^%wheel'
+    line: '%wheel ALL=(ALL) NOPASSWD: ALL'
+    validate: 'visudo -cf %s'  
+  become: yes
+
+- name: Adding centos user
+  user:
+    name: centos
+    comment: Cent OS
+    groups: wheel
+  become: yes    
+

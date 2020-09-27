@@ -1,4 +1,4 @@
-(ns hammer.cass
+(ns hammer.riak
   (:require
    [hammer.utils       :refer [exit rand-str2]]
    [clojure.core.async :as as]
@@ -11,7 +11,7 @@
                                                  RiakCluster$Builder 
                                                  RiakCluster]
    [com.basho.riak.client.core.query             Location Namespace]
-   [com.basho.riak.client.api.commands.buckets   FetchBucketProperties 
+   [com.basho.riak.client.api.commands.buckets   FetchBucketProperties$Builder 
                                                  StoreBucketProperties]))
 
 (defn getBuilder
@@ -45,8 +45,8 @@
   (Namespace. name))
 
 (defn getBucketProperties
-  [client namespace]
-  (let [fetchProps (-> (FetchBucketProperties/Builder. namespace)
+  [client bucket]
+  (let [fetchProps (-> (FetchBucketProperties$Builder. (createNamespace bucket))
                        (.build))
         fetchResponse    (.execute ^RiakClient client fetchProps)
         bucketProperties (.getBucketProperties fetchResponse)      ]
@@ -55,3 +55,6 @@
 (defn setBucketProperties
   [_client _properties]
   0)
+
+()
+

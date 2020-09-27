@@ -1,0 +1,4 @@
+- hosts: cassandra-servers
+  remote_user: centos
+  roles:
+    - role: cassandra

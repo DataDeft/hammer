@@ -1,0 +1,12 @@
+- name: Rendering Postfix main config
+  template:
+    dest: /etc/postfix/main.cf
+    mode: 0444
+    src: main.cf.j2
+  become: yes
+
+- name: Restarting Postfix
+  service:
+    name: postfix
+    state: restarted
+  become: yes

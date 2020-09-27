@@ -1,0 +1,5 @@
+---
+auth_file_location: '/home/centos/.ssh/authorized_keys'
+ssh_keys:
+  - {'name': 'istvan', 'key': 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDAOIFhKqmH43yjbEFDuQvpDP9x7XvumG8nDx/LmNO7nYhyTv5h8XTxpG8gD7erPoBW16O3AEUlMZEfQnet5eE9WYzhesVBUF0WjnOhLQoeBDO6cY/l2MCKLXZ5yEc0BxgGWfrqfYBEGqoAGr4Wno5VygK20obL9s0xbtlVP+0cOXC9viWl/pbHstbbN2feaYdVmlsvAqYtS3D164EXMsYS09beS7rKSSzTo/kZFQxdekXwgI4q7uyxjXchY0D4GAfFSwxYvqz9d3LNaWuiqnS23OOSm7tNGxo+fqlsLkUG3bYwRE6dL/dDQMFQk3uvRA5MGfFWUJZ2EEe6RSRpaAEf istvan@lambdainisght.com'}
+

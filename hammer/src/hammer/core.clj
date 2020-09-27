@@ -2,6 +2,7 @@
   (:require
    [hammer.utils       :refer [exit read-config getOpts]]
    [hammer.cass           :as cass]
+   [hammer.riak           :as riak]
    [clojure.core.async    :as as   ]
    [clojure.tools.logging :as log  ])
   ; Java
@@ -26,62 +27,72 @@
           _                       (log/info (format "Database flavor: %s" database))
           config                  (:ok (read-config config-file))
           _                       (if (nil? config) (exit 1) (log/info config))
+          ; Cassandra
           host                    (get-in config [:cassandra-client :initial-server-host])
           port                    (get-in config [:cassandra-client :initial-server-port])
           keyspace                (get-in config [:cassandra-client :keyspace])
           dc                      (get-in config [:cassandra-client :dc])
           replication             (get-in config [:cassandra-client :replication-factor])
           durable-writes          (get-in config [:cassandra-client :durable-writes])
+          application-config-path (get-in config [:cassandra-client :application-config-path])
+          hash-size               (get-in config [:cassandra-tables :table0 :hash-size])
+          
+          ; Riak
+          riak-nodes              (get-in config [:riak-client :nodes])
+          riak-bucket             (get-in config [:riak-client :bucket])
+          
+          ; General stuff
           iterations              (get-in config [:hammer :number-of-iterations])
           runs                    (get-in config [:hammer :number-of-runs])
           channel-timeout         (get-in config [:hammer :channel-timeout])
           thread-count            (get-in config [:hammer :thread-count])
-          application-config-path (get-in config [:cassandra-client :application-config-path])
-          hash-size               (get-in config [:cassandra-tables :table0 :hash-size])
-          _                   (log/info "Connecting to cluster")
-          initialSessionMaybe (cass/getSession host port dc)]
-      ; creating keyspace
-      (if (:ok initialSessionMaybe)
-        ; ok
-        (let [initial-session (:ok initialSessionMaybe)]
-          (cass/logClusterInfo initial-session)
-          (log/info
-           (cass/getExecutedStatement
-            (cass/createKeyspace initial-session keyspace {dc replication} durable-writes)))
-          (log/info "Closing initial session")
-          (.close initial-session))
-        ; err
-        (do
-          (log/error "Initial Cassandra session could not be established")
-          (log/error initialSessionMaybe)
-          (exit 1)))
+          
+          ]
+    
       ; creating threads and running inserts
       (let
         [ stat-chan (as/chan 8)
-         runResults (atom {})
-         testSession (:ok (cass/getSessionWithKeyspace host port dc keyspace application-config-path)) ]
+         runResults (atom {})]
 
         (cond
           (= database "cassandra")
+            
             (if (= test-mode "write")
               (do
+                (log/info "Creating keyspace if it has not been reated before")
+                (cass/createKeyspaceWithInitialSession host port dc keyspace replication durable-writes)
                 (log/info "Test mode: Write")
-                (cass/createTable0 testSession)
-                (dotimes [_ thread-count]
-                  (as/thread
-                    (Thread/sleep 100)
-                    (cass/insertTaskOneSession testSession runs iterations stat-chan hash-size))))
-            ; else
+                (let [testSession (:ok (cass/getSessionWithKeyspace host port dc keyspace application-config-path))]
+                  (cass/createTable0 testSession)
+                  (dotimes [_ thread-count]
+                    (as/thread
+                      (Thread/sleep 100)
+                      (cass/insertTaskOneSession testSession runs iterations stat-chan hash-size)))))
+              ; else
               (do
+                (log/info "Creating keyspace if it has not been reated before")
+                (cass/createKeyspaceWithInitialSession host port dc keyspace replication durable-writes)
                 (log/info "Test mode: Read")
-                (let [files (.list (File. "uids"))]
+                (let [files (.list (File. "uids"))
+                      testSession (:ok (cass/getSessionWithKeyspace host port dc keyspace application-config-path))]
                   (log/info (format "Number of files %s" (count files)))
                   (dotimes [_ thread-count]
                     (as/thread
                       (Thread/sleep 100)
                       (cass/selectTaskOneSession testSession runs iterations stat-chan files))))))
           (= database "riak")
-            (exit 0)
+            (if (= test-mode "write")
+              (do
+                (log/info "Test mode: Write")
+                (let [riak-client (riak/connectToCluster (riak/getCluster (riak/getBuilder) (riak/getAddresses riak-nodes)))]
+                  (log/info "Connected")
+                  (log/info (riak/getBucketProperties riak-client riak-bucket))
+                  
+                  (exit 0)))
+              
+              (do
+                (log/info "Test mode: Read")))
+              
           :else
           (do
             (log/info "Nor Cassandra or Riak??")

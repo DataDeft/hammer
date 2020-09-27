@@ -19,8 +19,11 @@
     :table0 {
       :hash-size 50
     }
-    :table1 {
-
-    }
+  }
+  :riak-client {
+    :bucket "perftest"
+    :nodes ("10.243.128.4" "10.243.128.5" "10.243.128.6" "10.243.128.7" "10.243.128.8")
+    :nval 3
+    :rval 2
   }
 }

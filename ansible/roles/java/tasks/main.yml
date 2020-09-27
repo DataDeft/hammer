@@ -1,0 +1,6 @@
+---
+- name: Install OpenJDK RPM
+  yum: name="{{ java_version }}" state='present'
+  become: yes
+
+

@@ -4,8 +4,16 @@ I thought it will a simple performance tool for Cassandra, running simple worklo
 
 ## Usage
 
+
+```
+bash run.read.cass.sh
+```
+
+## Flame
+
+### Profiling options
+
 ```bash
-cat run.sh
 java \
 -Dcom.sun.management.jmxremote.ssl=false \
 -Dcom.sun.management.jmxremote.authenticate=false \
@@ -17,14 +25,12 @@ java \
 -XX:+UseG1GC \
 -XX:MaxGCPauseMillis=20 \
 -XX:InitiatingHeapOccupancyPercent=60 \
--jar target/hammer-0.1.0-standalone.jar -c conf/app.edn
+-jar target/hammer-0.1.0-standalone.jar -c conf/app.edn -m "read" -d "cassandra"
 ```
 
-```
-bash run.sh
-```
+### Graphs 
 
-## Flame
+
 
 ![Flame](./flame.svg)
 

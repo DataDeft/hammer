@@ -1,0 +1,9 @@
+- hosts: localhost
+  become: false
+  gather_facts: no
+  tasks:
+  - name: Add ssh keys to known_host
+    shell: "ssh-keyscan -H {{ item }} >> ~/.ssh/known_hosts"
+    changed_when: false
+    with_items: '{{ groups.all }}'
+    become: false

@@ -1,0 +1,17 @@
+---
+- name: Creating FS
+  filesystem:
+    fstype: xfs
+    dev: "{{ disk_dev }}"
+  become: yes
+  when: disk_dev is defined
+
+- name: Mounting /data
+  mount:
+    name: /data
+    src: "{{ disk_dev }}"
+    fstype: xfs
+    opts: 'noatime,nodiratime,nosuid,nodev,nobarrier,logbufs=8,logbsize=256k,allocsize=8M'
+    state: mounted
+  become: yes
+

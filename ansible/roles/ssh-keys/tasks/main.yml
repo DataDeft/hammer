@@ -1,0 +1,24 @@
+---
+
+- name: Creates directory
+  file:
+    path: /home/centos/.ssh/
+    state: directory
+    owner: centos
+    group: wheel
+    mode: 0750
+    recurse: yes
+
+- name: Making sure authorized_keys exists
+  file: 
+    path: "{{ auth_file_location }}"
+    state: touch 
+    mode: "u=rw"
+  become: yes
+
+- name: Deploying keys
+  template: src={{ item.name }}.j2 dest={{ item.path }} owner=centos group=root mode=0400
+  with_items:
+    - { name: 'authorized_keys',     path: "{{ auth_file_location }}" }
+  become: yes
+

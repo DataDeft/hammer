@@ -1,0 +1,3 @@
+- hosts: riak-servers
+  roles:
+    - riaks

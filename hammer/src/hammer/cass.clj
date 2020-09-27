@@ -126,6 +126,24 @@
   [m]
   (format "%.1fms" m))
 
+(defn createKeyspaceWithInitialSession
+  [host port dc keyspace replication durable-writes]
+  (let [initialSessionMaybe (getSession host port dc)]
+    (if (:ok initialSessionMaybe)
+        ; ok
+      (let [initial-session (:ok initialSessionMaybe)]
+        (logClusterInfo initial-session)
+        (log/info
+         (getExecutedStatement
+          (createKeyspace initial-session keyspace {dc replication} durable-writes)))
+        (log/info "Closing initial session")
+        (.close initial-session))
+        ; err
+      (do
+        (log/error "Initial Cassandra session could not be established")
+        (log/error initialSessionMaybe)
+        (exit 1)))))
+
 (defn insertIntoTable0NoBind
   [session userid deviceid hash bob]
   (let [statement

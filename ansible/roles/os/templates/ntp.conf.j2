@@ -1,0 +1,29 @@
+driftfile /var/lib/ntp/drift
+restrict default nomodify notrap nopeer noquery
+restrict 127.0.0.1
+restrict ::1
+restrict 172.0.0.0 mask 255.0.0.0 nomodify notrap
+
+server 0.europe.pool.ntp.org iburst
+server 1.europe.pool.ntp.org iburst
+server 2.europe.pool.ntp.org iburst
+server 3.europe.pool.ntp.org iburst
+
+#crypto
+
+includefile /etc/ntp/crypto/pw
+
+keys /etc/ntp/keys
+
+# Specify the key identifiers which are trusted.
+#trustedkey 4 8 42
+
+# Specify the key identifier to use with the ntpdc utility.
+#requestkey 8
+
+# Specify the key identifier to use with the ntpq utility.
+#controlkey 8
+
+statistics clockstats cryptostats loopstats peerstats
+
+disable monitor
