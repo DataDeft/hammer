@@ -31,8 +31,9 @@
           host                    (get-in config [:cassandra-client :initial-server-host])
           port                    (get-in config [:cassandra-client :initial-server-port])
           keyspace                (get-in config [:cassandra-client :keyspace])
-          dc                      (get-in config [:cassandra-client :dc])
-          replication             (get-in config [:cassandra-client :replication-factor])
+          replication-map         (get-in config [:cassandra-client :replication-map])
+          connection-dc           (get-in config [:cassandra-client :connection-dc])
+                    
           durable-writes          (get-in config [:cassandra-client :durable-writes])
           application-config-path (get-in config [:cassandra-client :application-config-path])
           hash-size               (get-in config [:cassandra-tables :table0 :hash-size])
@@ -60,9 +61,9 @@
           (if (= test-mode "write")
             (do
               (log/info "Creating keyspace if it has not been reated before")
-              (cass/createKeyspaceWithInitialSession host port dc keyspace replication durable-writes)
+              (cass/createKeyspaceWithInitialSession host port keyspace replication-map durable-writes connection-dc)
               (log/info "Test mode: Write")
-              (let [testSession (:ok (cass/getSessionWithKeyspace host port dc keyspace application-config-path))]
+              (let [testSession (:ok (cass/getSessionWithKeyspace host port connection-dc keyspace application-config-path))]
                 (cass/createTable0 testSession)
                 (dotimes [_ thread-count]
                   (as/thread
@@ -70,11 +71,11 @@
                     (cass/insertTaskOneSession testSession runs iterations stat-chan hash-size)))))
               ; else
             (do
-              (log/info "Creating keyspace if it has not been reated before")
-              (cass/createKeyspaceWithInitialSession host port dc keyspace replication durable-writes)
+              (log/info "Creating keyspace if it has not been reated before")              
+              (cass/createKeyspaceWithInitialSession host port keyspace replication-map durable-writes connection-dc)
               (log/info "Test mode: Read")
               (let [files (.list (File. "uids"))
-                    testSession (:ok (cass/getSessionWithKeyspace host port dc keyspace application-config-path))]
+                    testSession (:ok (cass/getSessionWithKeyspace host port connection-dc keyspace application-config-path))]
                 (log/info (format "Number of files %s" (count files)))
                 (dotimes [_ thread-count]
                   (as/thread

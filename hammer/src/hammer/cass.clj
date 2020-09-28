@@ -1,6 +1,7 @@
 (ns hammer.cass
   (:require
    [hammer.utils       :refer [exit rand-str2 deltaTimeMs]]
+   [clojure.walk       :refer [stringify-keys]]
    [clojure.core.async :as as]
    [clojure.tools.logging :as log])
   ; Java
@@ -74,7 +75,7 @@
         (->
          (SchemaBuilder/createKeyspace keyspaceName)
          (.ifNotExists)
-         (.withNetworkTopologyStrategy replicationMap)
+         (.withNetworkTopologyStrategy (stringify-keys replicationMap))
          (.withDurableWrites durableWrites)
          (.build))]
     ; creating keyspace
@@ -119,15 +120,15 @@
     (log/info (str "Keyspace :: " k))))
 
 (defn createKeyspaceWithInitialSession
-  [host port dc keyspace replication durable-writes]
-  (let [initialSessionMaybe (getSession host port dc)]
+  [host port keyspace replication-map durable-writes connection-dc]
+  (let [initialSessionMaybe (getSession host port connection-dc)]
     (if (:ok initialSessionMaybe)
         ; ok
       (let [initial-session (:ok initialSessionMaybe)]
         (logClusterInfo initial-session)
         (log/info
          (getExecutedStatement
-          (createKeyspace initial-session keyspace {dc replication} durable-writes)))
+          (createKeyspace initial-session keyspace replication-map durable-writes)))
         (log/info "Closing initial session")
         (.close initial-session))
         ; err

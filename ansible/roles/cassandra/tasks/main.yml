@@ -1,0 +1,48 @@
+---
+
+- name: Adding Cassandra Repository
+  template: src={{ item.name }}.j2 dest={{ item.path }} owner=root group=root mode=0444
+  with_items:
+    - { name: 'cassandra.repo', path: '/etc/yum.repos.d/cassandra.repo' }
+  become: yes
+
+- name: Installing Apache Cassandra
+  yum:
+    name: cassandra
+    state: present
+  become: yes
+
+- name: Stopping Cassandra
+  service: name='cassandra' state=stopped
+  changed_when: False
+  ignore_errors: True
+  become: yes
+
+- name: Rendering Cassandra service and configuration
+  template: src={{ item.name }}.j2 dest={{ item.path }} owner=root group=root mode=0444
+  with_items:
+    - { name: 'cassandra.yaml',     path: "{{ cassandra_config_file }}" }
+    - { name: 'cassandra.service',  path: "{{ cassandra_service_file }}" }
+    - { name: 'jvm.options',        path: "{{ cassandra_jvm_options_file }}" }
+    - { name: 'logback.xml',        path: "{{ cassandra_logback_xml_file }}" }
+  become: yes
+
+- name: Fixing permission for data folder
+  file:
+    path: /data
+    owner: cassandra
+    group: cassandra
+    mode: '1775'
+  become: yes
+
+- name: Restarting Systemd
+  shell: systemctl daemon-reload
+  changed_when: False
+  become: yes
+
+- name: Starting Cassandra
+  service:
+    name: cassandra
+    state: started
+    enabled: yes
+  become: yes

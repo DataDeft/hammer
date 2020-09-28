@@ -1,0 +1,32 @@
+# /usr/lib/systemd/system/cassandra.service
+
+[Unit]
+Description=Cassandra
+After=network.target
+
+[Service]
+LimitNOFILE=128000
+LimitNPROC=32000
+LimitMEMLOCK=infinity
+LimitAS=infinity
+RuntimeDirectory=cassandra
+PIDFile=/var/run/cassandra/cassandra.pid
+Environment=CASSANDRA_HOME=/usr/share/cassandra
+Environment=CASSANDRA_CONF=/etc/cassandra/conf
+Environment=CASSANDRA_INCLUDE=/usr/share/cassandra/cassandra.in.sh
+Environment=CASSANDRA_OWNR=cassandra
+
+User=cassandra
+Group=cassandra
+
+Type=forking
+
+ExecStart=/usr/sbin/cassandra -p /var/run/cassandra/cassandra.pid
+
+StandardOutput=journal
+StandardError=journal
+
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

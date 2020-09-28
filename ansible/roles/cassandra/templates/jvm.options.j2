@@ -1,0 +1,88 @@
+######################
+# STARTUP PARAMETERS #
+######################
+
+# Enable pluggable metrics reporter. See Pluggable metrics reporting in Cassandra 2.0.2.
+#-Dcassandra.metricsReporterConfigFile=file
+
+########################
+# GENERAL JVM SETTINGS #
+########################
+
+# enable assertions. highly suggested for correct application functionality.
+-ea
+-server
+# see http://tech.stolsvik.com/2010/01/linux-java-thread-priorities-workar
+-XX:+UseThreadPriorities
+-XX:ThreadPriorityPolicy=42
+
+# Enable heap-dump if there's an OOM
+-XX:+HeapDumpOnOutOfMemoryError
+
+# Per-thread stack size.
+-Xss256k
+
+# Larger interned string table, for gossip's benefit (CASSANDRA-6410)
+-XX:StringTableSize=1000003
+
+# Make sure all memory is faulted and zeroed on startup.
+# This helps prevent soft faults in containers and makes
+# transparent hugepage allocation more effective.
+-XX:+AlwaysPreTouch
+
+# Disable biased locking as it does not benefit Cassandra.
+-XX:-UseBiasedLocking
+-XX:+UseTLAB
+-XX:+ResizeTLAB
+-XX:+UseNUMA
+# http://www.evanjones.ca/jvm-mmap-pause.html
+-XX:+PerfDisableSharedMem
+-Djava.net.preferIPv4Stack=true
+
+### Debug options
+
+# uncomment to enable flight recorder
+#-XX:+UnlockCommercialFeatures
+#-XX:+FlightRecorder
+
+# uncomment to have Cassandra JVM listen for remote debuggers/profilers on port 1414
+#-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=1414
+
+# uncomment to have Cassandra JVM log internal method compilation (developers only)
+#-XX:+UnlockDiagnosticVMOptions
+#-XX:+LogCompilation
+
+#################
+# HEAP SETTINGS #
+#################
+
+-Xms8G
+-Xmx8G
+
+#################
+#  GC SETTINGS  #
+#################
+
+### CMS Settings
+
+-XX:+UseG1GC
+-XX:MaxGCPauseMillis=500
+-XX:InitiatingHeapOccupancyPercent=60
+-XX:G1RSetUpdatingPauseTimePercent=5
+-XX:ParallelGCThreads=8
+-XX:ConcGCThreads=8
+
+### GC logging options -- uncomment to enable
+
+-XX:+PrintGCDetails
+-XX:+PrintGCDateStamps
+-XX:+PrintHeapAtGC
+-XX:+PrintTenuringDistribution
+-XX:+PrintGCApplicationStoppedTime
+-XX:+PrintPromotionFailure
+-XX:PrintFLSStatistics=1
+-Xloggc:/var/log/cassandra/gc.log
+-XX:+UseGCLogFileRotation
+-XX:NumberOfGCLogFiles=10
+-XX:GCLogFileSize=10M
+

@@ -10,8 +10,12 @@
     :keyspace "perftest"
     :initial-server-host "10.243.128.4"
     :initial-server-port 9042
-    :dc "dc1"
+    :connection-dc "dc1"
     :replication-factor 3
+    :replication-map {
+      :dc1 3
+      :dc2 2
+    }
     :durable-writes true
     :application-config-path "conf/application.conf"
   }

@@ -1,0 +1,25 @@
+[bastion]
+9.9.9.9
+
+[cassandra-servers]
+10.10.20.1 disk_dev='/dev/ebs'
+10.10.20.2 disk_dev='/dev/ebs'
+10.10.20.3 disk_dev='/dev/ebs'
+10.10.20.4 disk_dev='/dev/ebs'
+10.10.20.5 disk_dev='/dev/ebs'
+
+[cassandra-servers:vars]
+listen_interface='eth0'
+
+[riak-nodes]
+10.10.19.4 riak_node=riak ip_int=10.10.10.4
+10.10.19.5 riak_node=riak ip_int=10.10.10.5
+10.10.19.6 riak_node=riak ip_int=10.10.10.6
+10.10.19.7 riak_node=riak ip_int=10.10.10.7
+10.10.19.8 riak_node=riak ip_int=10.10.10.8
+
+[riak-nodes:vars]
+env=prod
+data_folder=/data/riak
+riak_server_ext=10.243.128.4
+riak_server_int=10.243.128.4

@@ -1,0 +1,7 @@
+[cassandra-servers]
+10.20.30.40
+
+[cassandra-servers:vars]
+hints_directory='/var/lib/cassandra/hints'
+data_file_directories='/var/lib/cassandra/data'
+commitlog_directory='/var/lib/cassandra/commitlog'
