@@ -99,3 +99,11 @@
       (let [ch (char (.intValue ^Double (+ leftLimit (* (.nextFloat ^Random random) (+ diff 1)))))]
         (.append ^StringBuilder stringBuilder ch)))
         (.toString ^StringBuilder stringBuilder)))
+
+(defn deltaTimeMs
+  [start end]
+  (/ (- end start) 1000000.0))
+
+(defn f
+  [m]
+  (format "%.1fms" m))

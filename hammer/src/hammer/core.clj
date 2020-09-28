@@ -56,43 +56,47 @@
 
         (cond
           (= database "cassandra")
-            
-            (if (= test-mode "write")
-              (do
-                (log/info "Creating keyspace if it has not been reated before")
-                (cass/createKeyspaceWithInitialSession host port dc keyspace replication durable-writes)
-                (log/info "Test mode: Write")
-                (let [testSession (:ok (cass/getSessionWithKeyspace host port dc keyspace application-config-path))]
-                  (cass/createTable0 testSession)
-                  (dotimes [_ thread-count]
-                    (as/thread
-                      (Thread/sleep 100)
-                      (cass/insertTaskOneSession testSession runs iterations stat-chan hash-size)))))
+
+          (if (= test-mode "write")
+            (do
+              (log/info "Creating keyspace if it has not been reated before")
+              (cass/createKeyspaceWithInitialSession host port dc keyspace replication durable-writes)
+              (log/info "Test mode: Write")
+              (let [testSession (:ok (cass/getSessionWithKeyspace host port dc keyspace application-config-path))]
+                (cass/createTable0 testSession)
+                (dotimes [_ thread-count]
+                  (as/thread
+                    (Thread/sleep 100)
+                    (cass/insertTaskOneSession testSession runs iterations stat-chan hash-size)))))
               ; else
-              (do
-                (log/info "Creating keyspace if it has not been reated before")
-                (cass/createKeyspaceWithInitialSession host port dc keyspace replication durable-writes)
-                (log/info "Test mode: Read")
-                (let [files (.list (File. "uids"))
-                      testSession (:ok (cass/getSessionWithKeyspace host port dc keyspace application-config-path))]
-                  (log/info (format "Number of files %s" (count files)))
-                  (dotimes [_ thread-count]
-                    (as/thread
-                      (Thread/sleep 100)
-                      (cass/selectTaskOneSession testSession runs iterations stat-chan files))))))
+            (do
+              (log/info "Creating keyspace if it has not been reated before")
+              (cass/createKeyspaceWithInitialSession host port dc keyspace replication durable-writes)
+              (log/info "Test mode: Read")
+              (let [files (.list (File. "uids"))
+                    testSession (:ok (cass/getSessionWithKeyspace host port dc keyspace application-config-path))]
+                (log/info (format "Number of files %s" (count files)))
+                (dotimes [_ thread-count]
+                  (as/thread
+                    (Thread/sleep 100)
+                    (cass/selectTaskOneSession testSession runs iterations stat-chan files))))))
+
           (= database "riak")
-            (if (= test-mode "write")
-              (do
-                (log/info "Test mode: Write")
-                (let [riak-client (riak/connectToCluster (riak/getCluster (riak/getBuilder) (riak/getAddresses riak-nodes)))]
-                  (log/info "Connected")
-                  (log/info (riak/getBucketProperties riak-client riak-bucket))
-                  
-                  (exit 0)))
-              
-              (do
-                (log/info "Test mode: Read")))
-              
+          
+          (if (= test-mode "write")
+            (do
+              (log/info "Test mode: Write")
+              (let [riak-client (riak/connectToCluster (riak/getCluster (riak/getBuilder) (riak/getAddresses riak-nodes)))]
+                (log/info "Connected")
+                (log/info (riak/getBucketProperties riak-client riak-bucket))
+                (dotimes [_ thread-count]
+                  (as/thread
+                    (Thread/sleep 100)
+                    (riak/insertTask riak-client riak-bucket runs iterations stat-chan hash-size)))))
+
+            (do
+              (log/info "Test mode: Read")))
+
           :else
           (do
             (log/info "Nor Cassandra or Riak??")

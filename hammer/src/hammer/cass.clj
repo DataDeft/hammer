@@ -1,6 +1,6 @@
 (ns hammer.cass
   (:require
-   [hammer.utils       :refer [exit rand-str2]]
+   [hammer.utils       :refer [exit rand-str2 deltaTimeMs]]
    [clojure.core.async :as as]
    [clojure.tools.logging :as log])
   ; Java
@@ -117,14 +117,6 @@
   (doseq
    [k (getKeyspaces session)]
     (log/info (str "Keyspace :: " k))))
-
-(defn deltaTimeMs
-  [start end]
-  (/ (- end start) 1000000.0))
-
-(defn f
-  [m]
-  (format "%.1fms" m))
 
 (defn createKeyspaceWithInitialSession
   [host port dc keyspace replication durable-writes]
