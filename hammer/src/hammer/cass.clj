@@ -63,6 +63,10 @@
      " : " (.toString (.getCassandraVersion host))
      " : " (.getOpenConnections host))))
 
+(defn getNettyOptions 
+  []
+  )
+
 (defn getKeyspaces
   [session]
   (for [keyspace (.values (.getKeyspaces (.getMetadata session)))]
